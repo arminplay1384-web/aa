@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سیستم هوشمند یادگیری واژگان</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .container { width: 100%; max-width: 480px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    
+    /* Tabs & Auth */
+    .tabs { display: flex; gap: 6px; background: #0f172a; padding: 5px; border-radius: 10px; margin-bottom: 1.5rem; }
+    .tab-btn { flex: 1; padding: 10px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 8px; font-weight: 600; transition: 0.2s; }
+    .tab-btn.active { background: var(--primary); color: #fff; }
+    .form-group { margin-bottom: 1.2rem; }
+    label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; }
+    input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); border-radius: 8px; color: #fff; outline: none; direction: ltr; font-size: 1rem; }
+    input:focus { border-color: var(--primary); }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: var(--primary); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .btn:hover { background: var(--primary-hover); }
+    .msg-box { padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+    .msg-box.error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; display: block; }
+    .msg-box.success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; display: block; }
+
+    /* App UI */
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+    .progress-wrapper { margin-bottom: 1.5rem; }
+    .progress-bar { width: 100%; height: 8px; background: #0f172a; border-radius: 999px; overflow: hidden; margin-top: 6px; }
+    .progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.3s; }
+
+    /* Flashcard 3D */
+    .card-scene { height: 260px; perspective: 1000px; cursor: pointer; margin-bottom: 1.5rem; }
+    .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 12px; }
+    .card-scene.flipped .card-inner { transform: rotateY(180deg); }
+    .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 12px; border: 1px solid var(--border); padding: 1.5rem; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: #243046; }
+    
+    .card-front h2 { font-size: 2rem; color: #a5b4fc; direction: ltr; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; }
+    .audio-btn { background: #3b82f6; border: none; color: white; border-radius: 50%; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1rem; }
+    .card-phonetic { color: var(--text-muted); font-size: 0.95rem; direction: ltr; margin-bottom: 1rem; }
+    .card-back { transform: rotateY(180deg); background: #1e1b4b; border-color: #4338ca; }
+    .card-back h3 { font-size: 1.4rem; color: #fbcfe8; margin-bottom: 0.8rem; }
+    .card-back p { font-size: 0.9rem; color: #cbd5e1; direction: ltr; line-height: 1.5; }
+
+    /* Actions */
+    .status-actions { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .btn-status { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: #fff; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+    .btn-status.learned { background: var(--success); border-color: var(--success); }
+    .btn-status.review { background: var(--warning); border-color: var(--warning); color: #000; }
+
+    .nav-controls { display: flex; justify-content: space-between; align-items: center; }
+    .btn-nav { background: #334155; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <!-- بخش لاگین و ثبت نام -->
+  <div id="auth-section" class="container">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-login" onclick="setAuthTab('login')">ورود</button>
+      <button class="tab-btn" id="tab-register" onclick="setAuthTab('register')">ثبت‌نام جدید</button>
+    </div>
+
+    <div id="auth-msg" class="msg-box"></div>
+
+    <form onsubmit="submitAuth(event)">
+      <div class="form-group">
+        <label>نام کاربری (آیدی)</label>
+        <input type="text" id="username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>کلمه عبور</label>
+        <input type="password" id="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" id="auth-btn" class="btn">ورود به پنل</button>
+    </form>
+  </div>
+
+  <!-- بخش برنامه فلش کارت متصل به دیتابیس -->
+  <div id="app-section" class="container" style="display: none;">
+    <div class="header">
+      <div>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">کاربر فعال:</span>
+        <strong id="user-display" style="color: #818cf8; margin-right: 4px;"></strong>
+      </div>
+      <button onclick="logout()" style="background: none; border: 1px solid #ef4444; color: #f87171; padding: 4px 10px; border-radius: 6px; cursor: pointer;">خروج</button>
+    </div>
+
+    <div class="progress-wrapper">
+      <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted);">
+        <span>پیشرفت یادگیری دیتابیس</span>
+        <span id="learned-count">0 / 0</span>
+      </div>
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="card-scene" onclick="flipCurrentCard()">
+      <div class="card-inner" id="card-inner">
+        <div class="card-face card-front">
+          <h2>
+            <span id="card-word">Word</span>
+            <button class="audio-btn" title="پخش تلفظ" onclick="playAudio(event)">🔊</button>
+          </h2>
+          <div class="card-phonetic" id="card-phonetic">/phonetic/</div>
+          <span style="font-size: 0.75rem; color: #94a3b8; position: absolute; bottom: 12px;">روی کارت کلیک کنید تا معنی باز شود</span>
+        </div>
+        <div class="card-face card-back">
+          <h3 id="card-meaning">معنی کلمه</h3>
+          <p id="card-example">Example sentence</p>
+          <span style="font-size: 0.75rem; color: #94a3b8; position: absolute; bottom: 12px;">برای بازگشت کلیک کنید</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- دکمه‌های وضعیت یادگیری که مستقیماً در دیتابیس ذخیره می‌شوند -->
+    <div class="status-actions">
+      <button id="btn-mark-review" class="btn-status" onclick="updateLearnedStatus(false)">نیاز به تمرین ⏳</button>
+      <button id="btn-mark-learned" class="btn-status" onclick="updateLearnedStatus(true)">کامل بلدم ✔️</button>
+    </div>
+
+    <div class="nav-controls">
+      <button class="btn-nav" onclick="changeCard(-1)">➔ قبلی</button>
+      <span id="card-index-display" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+      <button class="btn-nav" onclick="changeCard(1)">بعدی ⬅</button>
+    </div>
+  </div>
+
+  <script>
+    let currentMode = 'login';
+    let cards = [];
+    let currentIndex = 0;
+
+    window.onload = async () => {
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        if (data.logged_in) {
+          startApp(data.username);
+        }
+      } catch (e) {
+        console.error("خطا در اتصال به سرور", e);
+      }
+    };
+
+    function setAuthTab(mode) {
+      currentMode = mode;
+      document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+      document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+      document.getElementById('auth-btn').innerText = mode === 'login' ? 'ورود به حساب' : 'ثبت نام در دیتابیس';
+      showAuthMsg('', '');
+    }
+
+    function showAuthMsg(msg, type) {
+      const box = document.getElementById('auth-msg');
+      box.className = `msg-box ${type}`;
+      box.innerText = msg;
+    }
+
+    async function submitAuth(e) {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const endpoint = currentMode === 'login' ? '/api/login' : '/api/register';
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showAuthMsg(data.error || 'خطایی رخ داد', 'error');
+          return;
+        }
+
+        showAuthMsg(data.message, 'success');
+        setTimeout(() => startApp(data.username), 500);
+      } catch (err) {
+        showAuthMsg('خطا در برقراری ارتباط با سرور پایگاه داده', 'error');
+      }
+    }
+
+    async function startApp(username) {
+      document.getElementById('auth-section').style.display = 'none';
+      document.getElementById('app-section').style.display = 'block';
+      document.getElementById('user-display').innerText = username;
+      await fetchCards();
+    }
+
+    async function fetchCards() {
+      const res = await fetch('/api/cards');
+      if (res.ok) {
+        const data = await res.json();
+        cards = data.cards;
+        currentIndex = 0;
+        renderCard();
+        updateProgress();
+      }
+    }
+
+    function renderCard() {
+      if (!cards.length) return;
+      const card = cards[currentIndex];
+      document.getElementById('card-inner').parentElement.classList.remove('flipped');
+
+      setTimeout(() => {
+        document.getElementById('card-word').innerText = card.word;
+        document.getElementById('card-phonetic').innerText = card.phonetic;
+        document.getElementById('card-meaning').innerText = card.meaning;
+        document.getElementById('card-example').innerText = `"${card.example}"`;
+        document.getElementById('card-index-display').innerText = `کارت ${currentIndex + 1} از ${cards.length}`;
+
+        // به‌روزرسانی استایل دکمه‌های بلدم بر اساس دیتابیس
+        const isLearned = Boolean(card.is_learned);
+        document.getElementById('btn-mark-learned').classList.toggle('learned', isLearned);
+        document.getElementById('btn-mark-review').classList.toggle('review', !isLearned);
+      }, 150);
+    }
+
+    function flipCurrentCard() {
+      document.getElementById('card-inner').parentElement.classList.toggle('flipped');
+    }
+
+    function playAudio(e) {
+      e.stopPropagation(); // جلوگیری از چرخیدن کارت هنگام کلیک روی بلندگو
+      const word = cards[currentIndex].word;
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function changeCard(dir) {
+      currentIndex = (currentIndex + dir + cards.length) % cards.length;
+      renderCard();
+    }
+
+    // ذخیره وضعیت یادگیری کلمه در دیتابیس SQLite
+    async function updateLearnedStatus(isLearned) {
+      const card = cards[currentIndex];
+      card.is_learned = isLearned ? 1 : 0;
+      
+      renderCard();
+      updateProgress();
+
+      await fetch(`/api/cards/${card.id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_learned: isLearned })
+      });
+    }
+
+    function updateProgress() {
+      const learnedCount = cards.filter(c => c.is_learned).length;
+      const total = cards.length;
+      const pct = total === 0 ? 0 : Math.round((learnedCount / total) * 100);
+      document.getElementById('learned-count').innerText = `${learnedCount} از ${total} (${pct}%)`;
+      document.getElementById('progress-fill').style.width = `${pct}%`;
+    }
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      location.reload();
+    }
+  </script>
+</body>
+</html>
